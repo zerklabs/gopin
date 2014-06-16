@@ -1,3 +1,9 @@
+// This assumes the input is already just the subjectPublicKeyInfo
+// from whatever certificate you are wanting to pin against
+//
+// If you only have a certificate and want to get the subjectPublicKeyInfo
+// see: get_subject_pubkeyinfo.go
+//
 package main
 
 import (
