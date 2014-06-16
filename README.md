@@ -2,11 +2,15 @@ gopin - Certificate Pinning in Go
 =================================
 
 ## Introduction
-This is a proof of concept for enabling certificate pinning in Go. It currently makes an out-of-band call to retrieve the remote host certificate and compares it against a trusted DER encoded public key that you provide.
+This is a proof of concept for enabling certificate pinning in Go. It does this by providing an http.Transport object
+with a custom Dial method. If the pin check fails, the Dial method will never work and will only return an error.
 
-See the examples directory for a server and client setup.
 
 ## Usage
+If the pinned certificate matches the host certificate, it will not return an error and will
+return a valid http.Transport. However, if the pinning does fail, any subsequent connection attempt using
+the http client with the failed transport will fail. See examples/gopin_example.go
+
 
 ```
 package main
@@ -23,17 +27,16 @@ func main() {
     panic(err)
   }
 
-  transport, err := gopin.New("127.0.0.1:8081", ourTrustedPublicKey.PublicKeyInfo)
+  transport, err := gopin.New(ourTrustedPublicKey, "https://127.0.0.1:8081")
 
   if err != nil {
     panic(err)
   }
 
-  if transport.State == false {
-    panic("This wasn't supposed to happen..")
-  } else {
-    fmt.Println("Remote host certificate matched our trusted public key!")
-  }
+  client := &http.Client{Transport: transport}
+  resp, err := client.Get("https://127.0.0.1:8081")
+
+  // do something with your results!
 }
 ```
 

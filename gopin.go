@@ -1,116 +1,69 @@
 package gopin
 
 import (
-	// "bytes"
-	// "crypto/tls"
-	// "crypto/x509"
-	// "errors"
+	"bytes"
+	"crypto/tls"
+	"errors"
 	"io/ioutil"
-	// "net/http"
+	"net"
+	"net/http"
+	"time"
 )
 
-// type PinnedHttpTransport struct {
-// 	Transport *http.Transport
-// 	State     bool
-// }
+type PinnedTransport struct {
+	http.Transport
+	PinnedKey []byte
+}
 
-// type PinnedConnectionState struct {
-// 	PublicKeyInfo   []byte
-// 	ConnectionState tls.ConnectionState
-// }
+func New(publicKeyInfo []byte, tlsConfig *tls.Config) (*http.Transport, error) {
+	dialer := &PinnedTransport{
+		PinnedKey: publicKeyInfo,
+	}
 
-// func New(address string, pinnedPublicKey []byte) (*PinnedHttpTransport, error) {
-// 	pinnedTransport := &PinnedHttpTransport{
-// 		State:     false,
-// 		Transport: &http.Transport{},
-// 	}
+	if tlsConfig == nil {
+		tlsConfig = &tls.Config{
+			InsecureSkipVerify: true,
+		}
+	}
 
-// 	if len(pinnedPublicKey) == 0 {
-// 		return pinnedTransport, errors.New("Empty public key")
-// 	}
+	dialer.Transport = http.Transport{
+		Dial:            dialer.Dial,
+		TLSClientConfig: tlsConfig,
+	}
 
-// 	remoteTlsState, err := FetchRemotePublicKey(address)
+	return &dialer.Transport, nil
+}
 
-// 	if err != nil {
-// 		return pinnedTransport, err
-// 	}
+func (t *PinnedTransport) Dial(network, address string) (net.Conn, error) {
+	conn, err := tls.DialWithDialer(new(net.Dialer), network, address, &tls.Config{InsecureSkipVerify: true})
 
-// 	if bytes.Equal(remoteTlsState.PublicKeyInfo, pinnedPublicKey) {
-// 		// The keys matched so set the state as true
-// 		pinnedTransport.State = true
+	if err != nil {
+		return nil, err
+	}
 
-// 		tlsConfig := &tls.Config{
-// 			Certificates: make([]tls.Certificate, 1),
-// 			RootCAs:      x509.NewCertPool(),
-// 		}
+	defer conn.Close()
 
-// 		rawCertificates := make([][]byte, len(remoteTlsState.ConnectionState.PeerCertificates))
+	pinnedKeyMatched := false
 
-// 		for i, v := range remoteTlsState.ConnectionState.PeerCertificates {
-// 			rawCertificates[i] = v.Raw
+	// The certificate chain will have the server certificate as the first
+	// object and any signing CA's as the additional nodes
+	for i, v := range conn.ConnectionState().PeerCertificates {
+		if i == 0 {
+			if bytes.Equal(t.PinnedKey, v.RawSubjectPublicKeyInfo) {
+				pinnedKeyMatched = true
+			}
+		}
+	}
 
-// 			if i > 0 {
-// 				tlsConfig.RootCAs.AddCert(v)
-// 			}
-// 		}
+	if pinnedKeyMatched {
+		return (&net.Dialer{
+			KeepAlive: 30 * time.Second,
+			Timeout:   30 * time.Second,
+		}).Dial(network, address)
+	}
 
-// 		tlsConfig.Certificates[0] = tls.Certificate{
-// 			Certificate: rawCertificates,
-// 		}
-
-// 		tlsConfig.ServerName = remoteTlsState.ConnectionState.ServerName
-// 		tlsConfig.CipherSuites = []uint16{remoteTlsState.ConnectionState.CipherSuite}
-
-// 		pinnedTransport.Transport.TLSClientConfig = tlsConfig
-// 	}
-
-// 	return pinnedTransport, nil
-// }
-
-// // expects input to be IP||HOSTNAME:PORT
-// func FetchRemotePublicKey(host string) (PinnedConnectionState, error) {
-// 	pinnedConnectionState := PinnedConnectionState{
-// 		PublicKeyInfo: make([]byte, 0),
-// 	}
-
-// 	// using a config that does no verification to avoid
-// 	// failing on self-signed certs
-// 	unsafeTlsConfig := &tls.Config{
-// 		InsecureSkipVerify: true,
-// 	}
-
-// 	conn, err := tls.Dial("tcp", host, unsafeTlsConfig)
-
-// 	if err != nil {
-// 		return pinnedConnectionState, err
-// 	}
-
-// 	// since we aren't writing or reading directly from this session
-// 	// we need to call Handshake() manually
-// 	err = conn.Handshake()
-
-// 	if err != nil {
-// 		return pinnedConnectionState, err
-// 	}
-
-// 	connState := conn.ConnectionState()
-
-// 	// The certificate chain will have the server certificate as the first
-// 	// object and any signing CA's as the additional nodes
-// 	for i, v := range connState.PeerCertificates {
-// 		if i == 0 {
-// 			pinnedConnectionState.PublicKeyInfo = v.RawSubjectPublicKeyInfo
-// 		}
-// 	}
-
-// 	if err = conn.Close(); err != nil {
-// 		return pinnedConnectionState, err
-// 	}
-
-// 	pinnedConnectionState.ConnectionState = connState
-
-// 	return pinnedConnectionState, nil
-// }
+	return nil, errors.New("pin failed")
+}
 
 func ReadInTrustedPublicKey(file string) ([]byte, error) {
 	fileBytes, err := ioutil.ReadFile(file)

@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"crypto/tls"
 	"fmt"
 	"github.com/zerklabs/gopin"
 	"net/http"
@@ -17,15 +16,28 @@ func main() {
 		panic(err)
 	}
 
-	tlsConfig := &tls.Config{InsecureSkipVerify: true}
-	dialer := gopin.New(ourTrustedPublicKey, tlsConfig)
-	transport := &http.Transport{
-		Dial: dialer.Dial,
+	transport, err := gopin.New(ourTrustedPublicKey, nil)
+
+	if err != nil {
+		panic(err)
 	}
 
-	client := &http.Client{Transport: transport}
+	client := &http.Client{
+		Transport: transport,
+	}
 
-	fmt.Println("** Showing a successful example (keys match)")
+	// this should fail since the public key returned from
+	// the server and the pinned key do not match
+	_, err = client.Get("https://127.0.0.1:8082/get")
+
+	if err != nil {
+		fmt.Println("Failed to match trusted public key!")
+		fmt.Println(err)
+		fmt.Println("")
+	}
+
+	// Now we pass in the this should succeed since the public key returned from
+	// the server and the pinned key match
 	resp, err := client.Get("https://127.0.0.1:8081/get")
 
 	if err != nil {
@@ -33,16 +45,10 @@ func main() {
 	}
 
 	b := bytes.NewBuffer(nil)
+
+	fmt.Println("Successful pin comparison, should see Hello, World! below")
+
+	// Hello, World!
 	b.ReadFrom(resp.Body)
-
 	fmt.Println(b.String())
-
-	fmt.Println("** Showing a failed example (keys do not match)")
-	resp, err = client.Get("https://127.0.0.1:8082/get")
-
-	if err != nil {
-		fmt.Println("Failed to match trusted public key!")
-		fmt.Println(err)
-	}
-
 }
