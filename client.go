@@ -16,7 +16,7 @@ func New(publicKeyInfo []byte, config *tls.Config) *PinnedDialer {
 	return &PinnedDialer{PinnedKey: publicKeyInfo, TLSConfig: config}
 }
 
-func (t *PinnedDialer) Dial(network, address string) (*tls.Conn, error) {
+func (t *PinnedDialer) Dial(network, address string) (net.Conn, error) {
 	c, err := tls.Dial(network, address, t.TLSConfig)
 
 	if err != nil {
@@ -29,7 +29,7 @@ func (t *PinnedDialer) Dial(network, address string) (*tls.Conn, error) {
 	for i, v := range c.ConnectionState().PeerCertificates {
 		if i == 0 {
 			if bytes.Equal(t.PinnedKey, v.RawSubjectPublicKeyInfo) {
-				return c, nil
+				return tls.Dial(network, address, t.TLSConfig)
 			}
 		}
 	}
