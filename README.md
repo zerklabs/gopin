@@ -57,8 +57,8 @@ var trustedPublicKey = []byte{
 [...]
 ```
 
-### get_spki
-Reads a file via STDIN (or via --flag) and outputs a helpful HSTS header which can be used in Chrome
+### get_pkp
+Reads a file via STDIN (or via --flag) and outputs a helpful public key fingerprint which can be used in Chrome under chrome://net-internals/#hsts
 
 
 

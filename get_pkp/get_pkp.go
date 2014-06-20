@@ -97,7 +97,7 @@ func main() {
 	encodedSPKI := make([]byte, encodedLen)
 	base64.StdEncoding.Encode(encodedSPKI, hashBytes)
 
-	fmt.Printf("HSTS: %s/%s\n", sigAlgHash, string(encodedSPKI))
+	fmt.Printf("PKP: %s/%s\n", sigAlgHash, string(encodedSPKI))
 }
 
 func publicKeyAlgorithm(algo x509.PublicKeyAlgorithm) string {
